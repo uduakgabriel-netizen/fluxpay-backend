@@ -1,0 +1,436 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id                      String            @id @default(cuid())
+  walletAddress           String            @unique
+  email                   String?
+  emailVerified           Boolean           @default(false)
+  businessName            String
+  notificationSettings    Json?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  hasSelectedToken        Boolean           @default(false)
+  preferredTokenDecimals  Int               @default(9)
+  preferredTokenMint      String            @default("So11111111111111111111111111111111111111112")
+  preferredTokenSymbol    String            @default("SOL")
+  preferredTokenUpdatedAt DateTime          @default(now())
+  apiKeyHash              String?           @unique
+  apiKeyPrefix            String?
+  apiKeyLastChars         String?
+  apiKeyRotatedAt         DateTime?
+  webhookSecret           String?
+  webhookSecretPrefix     String?
+  webhookSecretLastChars  String?
+  webhookSecretRotatedAt  DateTime?
+  webhookUrl              String?
+  apiKeys                 ApiKey[]
+  checkoutSessions        CheckoutSession[]
+  invoices                Invoice[]
+  payments                Payment[]
+  refunds                 Refund[]
+  sessions                Session[]
+  settlements             Settlement[]
+  subscriptions           Subscription[]
+  teamMembers             TeamMember[]
+  webhookConfigs          WebhookConfig[]
+  webhookLogs             WebhookLog[]
+
+  @@map("merchants")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  merchantId String
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([merchantId])
+  @@map("sessions")
+}
+
+model ApiKey {
+  id           String     @id @default(cuid())
+  merchantId   String
+  keyHash      String     @unique
+  keyPrefix    String
+  name         String
+  mode         ApiKeyMode @default(LIVE)
+  permissions  Json
+  lastUsed     DateTime?
+  lastIp       String?
+  requestCount Int        @default(0)
+  revoked      Boolean    @default(false)
+  revokedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  merchant     Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@index([merchantId])
+  @@map("api_keys")
+}
+
+model Nonce {
+  id            String   @id @default(cuid())
+  walletAddress String   @unique
+  nonce         String
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@map("nonces")
+}
+
+model SupportedToken {
+  id        String   @id @default(cuid())
+  mint      String   @unique
+  symbol    String
+  name      String
+  decimals  Int
+  logoUrl   String?
+  rank      Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mint])
+  @@index([symbol])
+  @@index([rank])
+  @@map("supported_tokens")
+}
+
+model SwapQuote {
+  id              String   @id @default(cuid())
+  paymentId       String   @unique
+  inputMint       String
+  outputMint      String
+  inputAmount     String
+  expectedOutput  String
+  minOutputAmount String
+  quote           Json
+  slippageBps     Int      @default(100)
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([expiresAt])
+  @@map("swap_quotes")
+}
+
+model WebhookConfig {
+  id           String   @id @default(cuid())
+  merchantId   String
+  url          String
+  secret       String
+  events       Json
+  active       Boolean  @default(true)
+  maxRetries   Int      @default(5)
+  retryBackoff Int      @default(1000)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@map("webhook_configs")
+}
+
+model WebhookLog {
+  id           String           @id @default(cuid())
+  merchantId   String
+  event        String
+  url          String
+  payload      Json
+  status       WebhookLogStatus @default(PENDING)
+  statusCode   Int?
+  responseBody String?
+  duration     Int?
+  attempt      Int              @default(1)
+  maxAttempts  Int              @default(5)
+  nextRetryAt  DateTime?
+  error        String?
+  createdAt    DateTime         @default(now())
+  merchant     Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([event])
+  @@index([status])
+  @@index([createdAt])
+  @@map("webhook_logs")
+}
+
+model Payment {
+  id              String         @id @default(cuid())
+  merchantId      String
+  amount          Float
+  token           String
+  customerWallet  String?
+  customerEmail   String?
+  metadata        Json?
+  status          PaymentStatus  @default(PENDING)
+  txHash          String?
+  merchantWallet  String?
+  confirmedAt     DateTime?
+  swapRequired    Boolean        @default(false)
+  swappedFrom     String?
+  swappedAmount   Float?
+  swapTxHash      String?
+  swapFee         Float?
+  settled         Boolean        @default(false)
+  settledAt       DateTime?
+  refunded        Boolean        @default(false)
+  refundedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+  expiresAt       DateTime
+  lastSwapError   String?
+  lastSwapRetryAt DateTime?
+  swapRetries     Int            @default(0)
+  adminAlertSent  Boolean        @default(false)
+  statusHistory   PaymentEvent[]
+  merchant        Merchant       @relation(fields: [merchantId], references: [id])
+  refunds         Refund[]
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([settled])
+  @@index([merchantWallet])
+  @@map("payments")
+}
+
+model PaymentEvent {
+  id        String        @id @default(cuid())
+  paymentId String
+  status    PaymentStatus
+  timestamp DateTime      @default(now())
+  payment   Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_events")
+}
+
+model Refund {
+  id             String       @id @default(cuid())
+  merchantId     String
+  paymentId      String
+  amount         Float
+  reason         String?
+  note           String?
+  status         RefundStatus @default(PENDING)
+  txHash         String?
+  processedAt    DateTime?
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedReason String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  merchant       Merchant     @relation(fields: [merchantId], references: [id])
+  payment        Payment      @relation(fields: [paymentId], references: [id])
+
+  @@index([merchantId])
+  @@index([paymentId])
+  @@index([status])
+  @@map("refunds")
+}
+
+model Settlement {
+  id            String           @id @default(cuid())
+  merchantId    String
+  amount        Float
+  token         String
+  paymentIds    Json
+  paymentCount  Int
+  fee           Float            @default(0)
+  status        SettlementStatus @default(PROCESSING)
+  txHash        String?
+  fromAddress   String?
+  toAddress     String?
+  batchDate     DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+  completedAt   DateTime?
+  failedAt      DateTime?
+  failureReason String?
+  merchant      Merchant         @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([batchDate])
+  @@map("settlements")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  merchantId    String
+  invoiceNumber String
+  customer      String
+  customerEmail String?
+  amount        Float
+  token         String        @default("USDC")
+  description   String?
+  status        InvoiceStatus @default(DRAFT)
+  dueDate       DateTime
+  paidAt        DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  merchant      Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, invoiceNumber])
+  @@index([merchantId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Subscription {
+  id              String               @id @default(cuid())
+  merchantId      String
+  customer        String
+  customerEmail   String
+  plan            String
+  amount          Float
+  token           String               @default("USDC")
+  interval        SubscriptionInterval @default(MONTHLY)
+  status          SubscriptionStatus   @default(ACTIVE)
+  nextBillingDate DateTime
+  lastBilledAt    DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  merchant        Merchant             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model TeamMember {
+  id         String           @id @default(cuid())
+  merchantId String
+  name       String
+  email      String
+  role       TeamRole         @default(DEVELOPER)
+  status     TeamMemberStatus @default(PENDING)
+  invitedAt  DateTime         @default(now())
+  acceptedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, email])
+  @@index([merchantId])
+  @@map("team_members")
+}
+
+model CheckoutSession {
+  id              String                @id @default(cuid())
+  merchantId      String
+  orderId         String?
+  amount          Float
+  token           String                @default("USDC")
+  customerWallet  String?
+  status          CheckoutSessionStatus @default(PENDING)
+  successUrl      String?
+  cancelUrl       String?
+  webhookUrl      String?
+  swapQuote       Json?
+  transactionHash String?
+  paymentId       String?               @unique
+  inputToken      String?
+  paidAt          DateTime?
+  errorMessage    String?
+  expiresAt       DateTime
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  merchant        Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("checkout_sessions")
+}
+
+enum CheckoutSessionStatus {
+  PENDING
+  AWAITING_PAYMENT
+  PAYMENT_DETECTED
+  SWAPPING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum ApiKeyMode {
+  LIVE
+  TEST
+}
+
+enum WebhookLogStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  RETRYING
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  SWAPPED
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+enum SettlementStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  PAST_DUE
+}
+
+enum SubscriptionInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+}
+
+enum TeamMemberStatus {
+  ACTIVE
+  PENDING
+  REMOVED
+}

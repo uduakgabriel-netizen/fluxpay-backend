@@ -1,0 +1,53 @@
+{
+  "name": "fluxpay-backend",
+  "version": "1.0.0",
+  "description": "FluxPay Solana Payment Gateway - Backend API",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest --coverage",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev --name non_custodial",
+    "db:push": "prisma db push --accept-data-loss",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.61.1",
+    "@prisma/client": "^5.14.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
+    "bcryptjs": "^3.0.3",
+    "bs58": "^5.0.0",
+    "bullmq": "^5.74.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.10.1",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^5.0.0",
+    "tweetnacl": "^1.0.3",
+    "uuid": "^14.0.0",
+    "winston": "^3.19.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.12.12",
+    "@types/supertest": "^7.2.0",
+    "ioredis-mock": "^8.13.1",
+    "jest": "^29.7.0",
+    "prisma": "^5.14.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
