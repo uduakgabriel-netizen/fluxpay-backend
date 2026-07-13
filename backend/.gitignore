@@ -7,3 +7,5 @@ build/
 *.log
 .DS_Store
 next.config.ts
+coverage/
+
