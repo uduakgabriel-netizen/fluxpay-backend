@@ -33,14 +33,36 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, server-to-server)
       if (!origin) return callback(null, true);
-      // Allow frontend, checkout, and any merchant site
+
+      // Helper function to extract the origin (scheme + domain + port) from a URL string
+      const getOrigin = (urlStr: string): string => {
+        try {
+          return new URL(urlStr).origin;
+        } catch {
+          return urlStr.replace(/\/$/, ''); // Fallback: remove trailing slash
+        }
+      };
+
       const allowedOrigins = [
-        process.env.FRONTEND_URL || 'http://localhost:3000',
-        process.env.FLUXPAY_CHECKOUT_URL || 'http://localhost:3000',
+        'http://localhost:3000',
+        'https://fluxpay-frontend-ec3o.vercel.app',
+        'https://fluxpay-frontend-ec3o-nuy139igk.vercel.app',
       ];
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      // Allow any origin for checkout API (merchants call from their sites)
-      return callback(null, true);
+
+      // Add environment-configured frontend and checkout URLs
+      if (process.env.FRONTEND_URL) {
+        allowedOrigins.push(getOrigin(process.env.FRONTEND_URL));
+      }
+      if (process.env.FLUXPAY_CHECKOUT_URL) {
+        allowedOrigins.push(getOrigin(process.env.FLUXPAY_CHECKOUT_URL));
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        console.warn(`CORS blocked origin: ${origin}`);
+        return callback(new Error('Not allowed by CORS'));
+      }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
