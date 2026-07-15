@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -99,6 +100,10 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
 };
 
 app.use(cors(corsOptionsDelegate));
+app.options('*', cors(corsOptionsDelegate));
+
+// ─── Static Files ───────────────────────────────────────────
+app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── Body Parsing ───────────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
