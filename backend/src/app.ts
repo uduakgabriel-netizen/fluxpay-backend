@@ -44,6 +44,7 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
     'http://localhost:3000',
     'https://fluxpay-frontend-ec3o.vercel.app',
     'https://fluxpay-frontend-ec3o-nuy139igk.vercel.app',
+    'https://fluxpay-frontend-e-git-56a9e8-preciousnelson1255-5735s-projects.vercel.app',
   ];
 
   // Add environment-configured frontend and checkout URLs
