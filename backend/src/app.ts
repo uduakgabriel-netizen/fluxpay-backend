@@ -22,12 +22,6 @@ import { requestIdMiddleware } from './middleware/requestId';
 
 const app = express();
 
-// ─── Security Headers ──────────────────────────────────────
-app.use(helmet());
-
-// ─── Request Tracing ───────────────────────────────────────
-app.use(requestIdMiddleware);
-
 // ─── CORS ───────────────────────────────────────────────────
 const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null, options?: cors.CorsOptions) => void) => {
   const origin = req.header('Origin');
@@ -99,8 +93,24 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
   }
 };
 
+// CORS middleware MUST be applied first
 app.use(cors(corsOptionsDelegate));
 app.options('*', cors(corsOptionsDelegate));
+
+// Respond 204 to any preflight OPTIONS requests that were not intercepted by cors
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
+// ─── Security Headers ──────────────────────────────────────
+app.use(helmet());
+
+// ─── Request Tracing ───────────────────────────────────────
+app.use(requestIdMiddleware);
 
 // ─── Static Files ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, '../public')));
