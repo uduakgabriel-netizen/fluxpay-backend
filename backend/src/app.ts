@@ -28,47 +28,79 @@ app.use(helmet());
 app.use(requestIdMiddleware);
 
 // ─── CORS ───────────────────────────────────────────────────
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, server-to-server)
-      if (!origin) return callback(null, true);
+const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null, options?: cors.CorsOptions) => void) => {
+  const origin = req.header('Origin');
+  
+  // Helper function to extract the origin (scheme + domain + port) from a URL string
+  const getOrigin = (urlStr: string): string => {
+    try {
+      return new URL(urlStr).origin;
+    } catch {
+      return urlStr.replace(/\/$/, ''); // Fallback: remove trailing slash
+    }
+  };
 
-      // Helper function to extract the origin (scheme + domain + port) from a URL string
-      const getOrigin = (urlStr: string): string => {
-        try {
-          return new URL(urlStr).origin;
-        } catch {
-          return urlStr.replace(/\/$/, ''); // Fallback: remove trailing slash
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://fluxpay-frontend-ec3o.vercel.app',
+    'https://fluxpay-frontend-ec3o-nuy139igk.vercel.app',
+  ];
+
+  // Add environment-configured frontend and checkout URLs
+  if (process.env.FRONTEND_URL) {
+    allowedOrigins.push(getOrigin(process.env.FRONTEND_URL));
+  }
+  if (process.env.FLUXPAY_CHECKOUT_URL) {
+    allowedOrigins.push(getOrigin(process.env.FLUXPAY_CHECKOUT_URL));
+  }
+
+  let isAllowed = false;
+
+  if (!origin) {
+    isAllowed = true;
+  } else {
+    // 1. Check if it is in the hardcoded or environment-configured allowed list
+    if (allowedOrigins.includes(origin)) {
+      isAllowed = true;
+    }
+    // 2. Allow any vercel.app subdomains for preview/deployment builds
+    else {
+      try {
+        const hostname = new URL(origin).hostname;
+        if (/\.vercel\.app$/i.test(hostname)) {
+          isAllowed = true;
         }
-      };
-
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'https://fluxpay-frontend-ec3o.vercel.app',
-        'https://fluxpay-frontend-ec3o-nuy139igk.vercel.app',
-      ];
-
-      // Add environment-configured frontend and checkout URLs
-      if (process.env.FRONTEND_URL) {
-        allowedOrigins.push(getOrigin(process.env.FRONTEND_URL));
+      } catch {
+        // ignore invalid origin URLs
       }
-      if (process.env.FLUXPAY_CHECKOUT_URL) {
-        allowedOrigins.push(getOrigin(process.env.FLUXPAY_CHECKOUT_URL));
-      }
+    }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      } else {
-        console.warn(`CORS blocked origin: ${origin}`);
-        return callback(new Error('Not allowed by CORS'));
+    // 3. Always allow checkout and payment API requests from any merchant's website
+    if (!isAllowed) {
+      const isPublicPath =
+        req.path.startsWith('/checkout') ||
+        req.path.startsWith('/api/checkout') ||
+        req.path.startsWith('/api/payments');
+      if (isPublicPath) {
+        isAllowed = true;
       }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Helius-Api-Key', 'X-Idempotency-Key'],
-  })
-);
+    }
+  }
+
+  if (isAllowed) {
+    callback(null, {
+      origin: origin ? origin : true,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Helius-Api-Key', 'X-Idempotency-Key', 'X-Request-Id'],
+    });
+  } else {
+    console.warn(`CORS blocked origin: ${origin} for path: ${req.path}`);
+    callback(null, { origin: false }); // Safely disable CORS for this request without throwing a 500 error
+  }
+};
+
+app.use(cors(corsOptionsDelegate));
 
 // ─── Body Parsing ───────────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
