@@ -95,7 +95,7 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
     });
   } else {
     console.warn(`CORS blocked origin: ${origin} for path: ${req.path}`);
-    callback(new Error('Not allowed by CORS'));
+    callback(null, { origin: false }); // Safely disable CORS for this request without throwing a 500 error
   }
 };
 
