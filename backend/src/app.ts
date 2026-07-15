@@ -40,11 +40,13 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
     }
   };
 
-  const allowedOrigins = [
+  const allowedOrigins: (string | RegExp)[] = [
     'http://localhost:3000',
+    'https://fluxpay-frontend.vercel.app',
     'https://fluxpay-frontend-ec3o.vercel.app',
     'https://fluxpay-frontend-ec3o-nuy139igk.vercel.app',
     'https://fluxpay-frontend-e-git-56a9e8-preciousnelson1255-5735s-projects.vercel.app',
+    /\.vercel\.app$/
   ];
 
   // Add environment-configured frontend and checkout URLs
@@ -61,22 +63,17 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
     isAllowed = true;
   } else {
     // 1. Check if it is in the hardcoded or environment-configured allowed list
-    if (allowedOrigins.includes(origin)) {
+    const isInAllowedList = allowedOrigins.some(pattern => {
+      if (typeof pattern === 'string') return origin === pattern;
+      if (pattern instanceof RegExp) return pattern.test(origin);
+      return false;
+    });
+    
+    if (isInAllowedList) {
       isAllowed = true;
     }
-    // 2. Allow any vercel.app subdomains for preview/deployment builds
-    else {
-      try {
-        const hostname = new URL(origin).hostname;
-        if (/\.vercel\.app$/i.test(hostname)) {
-          isAllowed = true;
-        }
-      } catch {
-        // ignore invalid origin URLs
-      }
-    }
 
-    // 3. Always allow checkout and payment API requests from any merchant's website
+    // 2. Always allow checkout and payment API requests from any merchant's website
     if (!isAllowed) {
       const isPublicPath =
         req.path.startsWith('/checkout') ||
@@ -97,7 +94,7 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
     });
   } else {
     console.warn(`CORS blocked origin: ${origin} for path: ${req.path}`);
-    callback(null, { origin: false }); // Safely disable CORS for this request without throwing a 500 error
+    callback(new Error('Not allowed by CORS'));
   }
 };
 
