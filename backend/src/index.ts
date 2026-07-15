@@ -2,6 +2,10 @@ import { logger } from './utils/logger';
 import dotenv from 'dotenv';
 dotenv.config();
 
+if (process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL.replace(/^['"]|['"]$/g, '').trim();
+}
+
 import app from './app';
 import { initWebhookQueue, shutdownWebhookQueue } from './utils/webhook';
 import { initCronJobs, shutdownCronJobs } from './queues/jobQueue';
