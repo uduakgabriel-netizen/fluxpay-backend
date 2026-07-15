@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Solana wallet address: base58 encoded, 32-44 characters
-const walletAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const walletAddressRegex = /^[0-9a-zA-Z]{32,44}$/;
 
 export const nonceSchema = z.object({
   walletAddress: z

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const walletAddressRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const walletAddressRegex = /^[0-9a-zA-Z]{32,44}$/;
 
 /**
  * Payment creation schema — Non-custodial.
