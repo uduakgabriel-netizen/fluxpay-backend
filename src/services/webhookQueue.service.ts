@@ -48,7 +48,6 @@ export interface EnqueueWebhookInput {
 }
 
 export class WebhookQueueService {
-  private static redisConnection: IORedis | null = null;
   private static webhookQueue: Queue | null = null;
   private static webhookWorker: Worker | null = null;
   private static useRedis = false;
@@ -58,22 +57,52 @@ export class WebhookQueueService {
     if (this.initialized) return;
 
     try {
-      this.redisConnection = new IORedis(REDIS_URL, {
-        maxRetriesPerRequest: null,
-        enableReadyCheck: false,
-        lazyConnect: true,
-        retryStrategy: () => null,
+      const isTls = REDIS_URL.startsWith('rediss://') || REDIS_URL.includes('upstash.io');
+      const reachable = await new Promise<boolean>((resolve) => {
+        const probe = new IORedis(REDIS_URL, {
+          tls: isTls ? {} : undefined,
+          maxRetriesPerRequest: null,
+          enableReadyCheck: true,
+          lazyConnect: true,
+          connectTimeout: 8000,
+          retryStrategy: () => null,
+        });
+        probe.on('error', () => {});
+        probe.connect()
+          .then(() => probe.ping())
+          .then(() => {
+            probe.disconnect();
+            resolve(true);
+          })
+          .catch(() => {
+            probe.disconnect();
+            resolve(false);
+          });
       });
 
-      this.redisConnection.on('error', () => {
-        // Silently handled - fallback to in-memory
-      });
+      if (!reachable) {
+        throw new Error('Redis probe unreachable');
+      }
 
-      await this.redisConnection.connect();
-      logger.info('[WebhookQueue] Connected to Redis for persistent webhook queue');
+      let connection: any;
+      try {
+        const parsed = new URL(REDIS_URL);
+        connection = {
+          host: parsed.hostname,
+          port: Number(parsed.port) || 6379,
+          username: parsed.username || undefined,
+          password: parsed.password || undefined,
+          tls: isTls ? {} : undefined,
+          maxRetriesPerRequest: null,
+          connectTimeout: 15000,
+          retryStrategy: (times: number) => (times <= 3 ? Math.min(times * 500, 2000) : null),
+        };
+      } catch {
+        connection = { host: '127.0.0.1', port: 6379, maxRetriesPerRequest: null };
+      }
 
       this.webhookQueue = new Queue('webhook-delivery-queue', {
-        connection: this.redisConnection,
+        connection,
         defaultJobOptions: {
           attempts: MAX_ATTEMPTS,
           backoff: {
@@ -84,14 +113,9 @@ export class WebhookQueueService {
         },
       });
 
-      const workerConnection = new IORedis(REDIS_URL, {
-        maxRetriesPerRequest: null,
-        enableReadyCheck: false,
-        lazyConnect: true,
-        retryStrategy: () => null,
+      this.webhookQueue.on('error', (err) => {
+        logger.warn(`[WebhookQueue] Queue Redis error: ${err.message}`);
       });
-      workerConnection.on('error', () => {});
-      await workerConnection.connect();
 
       this.webhookWorker = new Worker(
         'webhook-delivery-queue',
@@ -99,7 +123,7 @@ export class WebhookQueueService {
           await WebhookQueueService.processJob(job);
         },
         {
-          connection: workerConnection,
+          connection,
           concurrency: 5,
           settings: {
             backoffStrategy: (attemptsMade: number) => {
@@ -108,6 +132,10 @@ export class WebhookQueueService {
           },
         }
       );
+
+      this.webhookWorker.on('error', (err) => {
+        logger.warn(`[WebhookQueue] Worker Redis error: ${err.message}`);
+      });
 
       this.webhookWorker.on('completed', (job) => {
         logger.info(`[WebhookQueue] Job ${job.id} completed successfully`);
@@ -119,6 +147,7 @@ export class WebhookQueueService {
 
       this.useRedis = true;
       this.initialized = true;
+      logger.info('[WebhookQueue] Connected to Redis for persistent webhook queue');
     } catch (err: any) {
       logger.warn(`[WebhookQueue] Redis unavailable (${err.message}). Using in-memory fallback queue.`);
       this.useRedis = false;
@@ -127,15 +156,18 @@ export class WebhookQueueService {
   }
 
   public static async shutdown(): Promise<void> {
-    if (this.webhookWorker) {
-      await this.webhookWorker.close();
-    }
-    if (this.webhookQueue) {
-      await this.webhookQueue.close();
-    }
-    if (this.redisConnection) {
-      this.redisConnection.disconnect();
-    }
+    try {
+      if (this.webhookWorker) {
+        await this.webhookWorker.close().catch(() => {});
+        this.webhookWorker = null as any;
+      }
+    } catch {}
+    try {
+      if (this.webhookQueue) {
+        await this.webhookQueue.close().catch(() => {});
+        this.webhookQueue = null as any;
+      }
+    } catch {}
     // Clear in-memory timers
     for (const item of inMemoryQueue) {
       if (item.timer) clearTimeout(item.timer);

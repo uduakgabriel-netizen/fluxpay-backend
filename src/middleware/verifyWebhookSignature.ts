@@ -19,11 +19,20 @@ export const memoryWebhookLogs: any[] = [];
 export function verifyWebhookSignature(
   secretEnvName: string,
   providerName: string,
-  headerNames: string[] = ['x-signature', 'x-webhook-signature']
+  headerNames: string[] = ['x-signature', 'x-webhook-signature', 'authorization']
 ) {
   return (req: Request, res: Response, next: NextFunction): void => {
     (async () => {
-      const secret = process.env[secretEnvName] || 'fluxpay-default-webhook-secret-32-byte-hex';
+      let secret = process.env[secretEnvName];
+      if (!secret) {
+        if (secretEnvName === 'NGN_WEBHOOK_SECRET' || secretEnvName === 'ONELIQUIDITY_WEBHOOK_SECRET') {
+          secret = process.env.ONELIQUIDITY_WEBHOOK_SECRET || process.env.NGN_WEBHOOK_SECRET;
+        }
+      }
+
+      if (!secret) {
+        secret = 'fluxpay-default-webhook-secret-32-byte-hex';
+      }
 
       // Search headers case-insensitively
       let signatureHeader: string | undefined;
@@ -37,14 +46,23 @@ export function verifyWebhookSignature(
 
       if (!signatureHeader) {
         logger.warn(`[WebhookSignature] Missing signature header for ${providerName} on ${req.originalUrl}`);
-        logAndAlertFailure(providerName, req, 'Missing signature header').catch(() => {});
+        await logAndAlertFailure(providerName, req, 'Missing signature header');
         throw new AuthError(`Invalid webhook signature from ${providerName}`);
       }
 
-      // Strip optional "sha256=" prefix if present
-      const cleanReceivedSig = signatureHeader.startsWith('sha256=')
-        ? signatureHeader.slice(7)
-        : signatureHeader;
+      // Strip optional "Bearer " or "sha256=" prefix if present
+      let cleanReceivedSig = signatureHeader;
+      if (cleanReceivedSig.startsWith('Bearer ')) {
+        cleanReceivedSig = cleanReceivedSig.slice(7).trim();
+      } else if (cleanReceivedSig.startsWith('sha256=')) {
+        cleanReceivedSig = cleanReceivedSig.slice(7).trim();
+      }
+
+      // Check if header is direct token matching the secret (common for Helius auth-header)
+      if (cleanReceivedSig === secret) {
+        next();
+        return;
+      }
 
       const payloadString = (req as any).rawBody
         ? (req as any).rawBody.toString('utf8')
@@ -71,7 +89,7 @@ export function verifyWebhookSignature(
 
       if (!isValid) {
         logger.warn(`[WebhookSignature] Signature mismatch for ${providerName} on ${req.originalUrl}`);
-        logAndAlertFailure(providerName, req, 'Invalid webhook signature').catch(() => {});
+        await logAndAlertFailure(providerName, req, 'Invalid webhook signature');
         throw new AuthError(`Invalid webhook signature from ${providerName}`);
       }
 
@@ -82,7 +100,6 @@ export function verifyWebhookSignature(
 }
 
 async function logAndAlertFailure(provider: string, req: Request, errorMsg: string): Promise<void> {
-  // 1. Immediately store in memory so metrics have it
   const logData = {
     id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     event: `webhook.${provider.toLowerCase()}.signature_failed`,
@@ -95,10 +112,10 @@ async function logAndAlertFailure(provider: string, req: Request, errorMsg: stri
   };
   memoryWebhookLogs.push(logData);
 
-  // 2. Alert via Discord (non-blocking)
+  // Alert via Discord/file
   AlertService.alertInvalidSignature(provider).catch(() => {});
 
-  // 3. Try to record in DB if connected
+  // Record in DB if available
   try {
     await prisma.webhookLog.create({
       data: logData as any,

@@ -24,7 +24,15 @@ export class AlertService {
   private static async sendDiscordAlert(embed: DiscordEmbed): Promise<void> {
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
     if (!webhookUrl) {
-      logger.warn('[AlertService] DISCORD_WEBHOOK_URL not configured. Skipping alert.');
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const alertLine = `[${embed.timestamp || new Date().toISOString()}] [ALERT] ${embed.title}: ${embed.description} ${JSON.stringify(embed.fields || [])}\n`;
+        fs.appendFileSync(path.join(process.cwd(), 'alerts.log'), alertLine);
+      } catch (err) {
+        // Fallback gracefully
+      }
+      logger.info(`[AlertService] ${embed.title}: ${embed.description}`);
       return;
     }
 

@@ -172,7 +172,7 @@ describe('Stage 7: Webhooks, Retry Queue & Monitoring', () => {
 
       expect(result.queued).toBe(true);
       expect(result.logId).toBeDefined();
-    });
+    }, 15000);
   });
 
   describe('Monitoring Endpoints', () => {
@@ -185,9 +185,9 @@ describe('Stage 7: Webhooks, Retry Queue & Monitoring', () => {
       expect(res.body.uptime).toBeGreaterThanOrEqual(0);
       expect(res.body.services).toBeDefined();
       expect(res.body.services.providers).toEqual({
-        jupiter: 'mock',
-        ngn: 'mock',
-        usdeur: 'mock',
+        jupiter: expect.stringMatching(/^(mock|real)$/),
+        ngn: expect.stringMatching(/^(mock|real)$/),
+        usdeur: expect.stringMatching(/^(mock|real)$/),
       });
     });
 

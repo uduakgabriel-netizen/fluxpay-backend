@@ -14,18 +14,43 @@ let cronQueue: Queue | null = null;
 let cronWorker: Worker | null = null;
 let fallbackTimers: NodeJS.Timeout[] = [];
 
+export function getBullMQConnection() {
+  const isTls = REDIS_URL.startsWith('rediss://') || REDIS_URL.includes('upstash.io');
+  try {
+    const parsed = new URL(REDIS_URL);
+    return {
+      host: parsed.hostname,
+      port: Number(parsed.port) || 6379,
+      username: parsed.username || undefined,
+      password: parsed.password || undefined,
+      tls: isTls ? {} : undefined,
+      maxRetriesPerRequest: null,
+      connectTimeout: 15000,
+      retryStrategy: (times: number) => (times <= 3 ? Math.min(times * 500, 2000) : null),
+    };
+  } catch {
+    return {
+      host: '127.0.0.1',
+      port: 6379,
+      maxRetriesPerRequest: null,
+    };
+  }
+}
+
 /**
  * Test if Redis is reachable before attempting to use BullMQ.
- * Returns a connected IORedis instance or null.
+ * Returns true or false.
  */
-async function tryConnectRedis(): Promise<IORedis | null> {
+async function isRedisReachable(): Promise<boolean> {
+  const isTls = REDIS_URL.startsWith('rediss://') || REDIS_URL.includes('upstash.io');
   return new Promise((resolve) => {
     const conn = new IORedis(REDIS_URL, {
+      tls: isTls ? {} : undefined,
       maxRetriesPerRequest: null,
       enableReadyCheck: true,
       lazyConnect: true,
-      connectTimeout: 3000,
-      retryStrategy: () => null, // Don't retry — we handle fallback
+      connectTimeout: 8000,
+      retryStrategy: () => null,
     });
 
     conn.on('error', () => {}); // Suppress all errors during probe
@@ -33,11 +58,12 @@ async function tryConnectRedis(): Promise<IORedis | null> {
     conn.connect()
       .then(() => conn.ping())
       .then(() => {
-        resolve(conn);
+        conn.disconnect();
+        resolve(true);
       })
       .catch(() => {
         conn.disconnect();
-        resolve(null);
+        resolve(false);
       });
   });
 }
@@ -49,10 +75,10 @@ async function tryConnectRedis(): Promise<IORedis | null> {
 export async function initCronJobs() {
   logger.info('Initializing Cron Jobs...');
 
-  const redisConn = await tryConnectRedis();
+  const reachable = await isRedisReachable();
 
-  if (redisConn) {
-    await initBullMQCronJobs(redisConn);
+  if (reachable) {
+    await initBullMQCronJobs();
   } else {
     logger.warn('[CronJobs] Redis unavailable — using in-memory setInterval fallback for cron jobs.');
     initFallbackCronJobs();
@@ -61,8 +87,12 @@ export async function initCronJobs() {
 
 // ─── BullMQ-based cron jobs (production, with Redis) ────────
 
-async function initBullMQCronJobs(connection: IORedis) {
+async function initBullMQCronJobs() {
+  const connection = getBullMQConnection();
   cronQueue = new Queue('cron-jobs', { connection });
+  cronQueue.on('error', (err) => {
+    logger.warn(`[CronQueue] Queue Redis error: ${err.message}`);
+  });
 
   // expire-payments: Every hour
   await cronQueue.add('expire-payments', {}, {
@@ -88,16 +118,6 @@ async function initBullMQCronJobs(connection: IORedis) {
   await cronQueue.add('monitorSwapFailureRate', {}, {
     repeat: { pattern: '0 * * * *' },
   });
-
-  // Worker connection needs its own IORedis instance
-  const workerConn = new IORedis(REDIS_URL, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    lazyConnect: true,
-    retryStrategy: () => null,
-  });
-  workerConn.on('error', () => {});
-  await workerConn.connect();
 
   cronWorker = new Worker('cron-jobs', async (job: Job) => {
     logger.info(`Starting cron job: ${job.name}`);
@@ -127,7 +147,11 @@ async function initBullMQCronJobs(connection: IORedis) {
       logger.error(`Error in cron job ${job.name}`, { error: error instanceof Error ? error.message : String(error) });
       throw error; // Let BullMQ handle retry/failure logging
     }
-  }, { connection: workerConn });
+  }, { connection });
+
+  cronWorker.on('error', (err) => {
+    logger.warn(`[CronWorker] Worker Redis error: ${err.message}`);
+  });
 
   cronWorker.on('failed', (job, err) => {
     logger.error(`Job ${job?.name} failed with error`, { error: err.message, jobId: job?.id });
@@ -176,10 +200,17 @@ export async function shutdownCronJobs() {
   fallbackTimers = [];
 
   // Shutdown BullMQ
-  if (cronWorker) {
-    await cronWorker.close();
-  }
-  if (cronQueue) {
-    await cronQueue.close();
-  }
+  try {
+    if (cronWorker) {
+      await cronWorker.close().catch(() => {});
+      cronWorker = null;
+    }
+  } catch {}
+
+  try {
+    if (cronQueue) {
+      await cronQueue.close().catch(() => {});
+      cronQueue = null;
+    }
+  } catch {}
 }

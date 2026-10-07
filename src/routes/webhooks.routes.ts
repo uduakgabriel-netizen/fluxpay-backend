@@ -15,22 +15,25 @@ router.post(
   verifyWebhookSignature('HELIUS_WEBHOOK_SECRET', 'Helius', [
     'x-helius-signature',
     'x-signature',
+    'authorization',
   ]),
   asyncHandler(handleHeliusWebhook)
 );
 
-// POST /api/webhooks/ngn — Receive payout status updates from NGN provider
+// POST /api/webhooks/ngn — Receive payout status updates from OneLiquidity NGN provider
 router.post(
   '/ngn',
-  verifyWebhookSignature('NGN_WEBHOOK_SECRET', 'NGN', [
+  verifyWebhookSignature('ONELIQUIDITY_WEBHOOK_SECRET', 'OneLiquidity', [
+    'x-oneliquidity-signature',
     'x-ngn-signature',
     'x-webhook-signature',
     'x-signature',
+    'authorization',
   ]),
   asyncHandler(handleNgnWebhook)
 );
 
-// POST /api/webhooks/usdeur — Receive payout status updates from USD/EUR provider
+// POST /api/webhooks/usdeur — Receive payout status updates from USD/EUR provider (stub)
 router.post(
   '/usdeur',
   verifyWebhookSignature('USDEUR_WEBHOOK_SECRET', 'USD-EUR', [
