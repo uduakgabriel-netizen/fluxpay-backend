@@ -8,4 +8,4 @@ build/
 .DS_Store
 next.config.ts
 coverage/
-
+prompt.md
