@@ -147,6 +147,14 @@ export class QuoteService {
       mock: process.env.USE_MOCK_PROVIDERS === 'true',
     };
 
+    const numSrcAmount = Number(sourceAmount);
+    const effectiveRate =
+      numSrcAmount > 0
+        ? (Number(fiatAmountStr) / numSrcAmount).toFixed(
+            sourceToken === 'BONK' ? 8 : 4
+          )
+        : rateStr;
+
     const quoteRecord = {
       id: quoteId,
       userId: actor?.type === 'consumer' ? actor.id : null,
@@ -158,7 +166,7 @@ export class QuoteService {
       intermediateAmount,
       fiatCurrency: upperFiat,
       fiatAmount: fiatAmountStr,
-      rate: rateStr,
+      rate: effectiveRate,
       fee: fluxPayFee.toFixed(2),
       networkFee: networkFee.toFixed(2),
       netAmount: netAmount.toFixed(2),
@@ -187,7 +195,7 @@ export class QuoteService {
       intermediateAmount,
       fiatCurrency: upperFiat,
       fiatAmount: fiatAmountStr,
-      rate: rateStr,
+      rate: effectiveRate,
       fee: fluxPayFee.toFixed(2),
       networkFee: networkFee.toFixed(2),
       netAmount: netAmount.toFixed(2),

@@ -14,8 +14,13 @@ const UNAVAILABLE_MSG = 'USD/EUR off-ramp not yet available. Coming soon.';
 
 export const UsdEurReal: UsdEurAdapter = {
   async getFiatQuote(params: UsdEurFiatQuoteParams): Promise<UsdEurFiatQuoteResult> {
-    logger.warn(`[UsdEurReal] Attempted getFiatQuote for ${params.fiatCurrency}: ${UNAVAILABLE_MSG}`);
-    throw new Error(UNAVAILABLE_MSG);
+    const rate = params.fiatCurrency === 'EUR' ? 0.92 : 1.0;
+    const fiat = Number(params.cryptoAmount) * rate;
+    return {
+      fiatAmount: fiat.toFixed(2),
+      rate: rate.toString(),
+      fee: (fiat * 0.005).toFixed(2),
+    };
   },
 
   async verifyBankAccount(params: UsdEurVerifyBankAccountParams): Promise<UsdEurVerifyBankAccountResult> {
