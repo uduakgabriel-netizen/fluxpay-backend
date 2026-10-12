@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+.env.production
+.env.*.local
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.json.key
+*wallet*.json
+*.pem
+*.key
+prompt.md
