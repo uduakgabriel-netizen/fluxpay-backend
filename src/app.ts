@@ -100,7 +100,7 @@ const corsOptionsDelegate = (req: express.Request, callback: (err: Error | null,
       origin: origin ? origin : true,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Helius-Api-Key', 'X-Idempotency-Key', 'X-Request-Id'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'X-API-KEY', 'X-Api-Key', 'X-Helius-Api-Key', 'X-Idempotency-Key', 'X-Request-Id'],
     });
   } else {
     console.warn(`CORS blocked origin: ${origin} for path: ${req.path}`);
