@@ -9,14 +9,14 @@ export interface NormalizedToken {
 }
 
 const DEFAULT_JUPITER_URLS = [
-  process.env.JUPITER_TOKEN_API_URL ? `${process.env.JUPITER_TOKEN_API_URL.replace(/\/$/, '')}/all` : '',
-  'https://tokens.jup.ag/tokens?tags=verified',
-  'https://token.jup.ag/strict',
-  'https://token.jup.ag/all',
-].filter(Boolean);
+  process.env.JUPITER_TOKEN_API_URL,
+  'https://lite-api.jup.ag/tokens/v1/verified',
+  'https://lite-api.jup.ag/tokens/v2/tag?query=verified',
+  'https://api.jup.ag/tokens/v2/tag?query=verified',
+].filter(Boolean) as string[];
 
 /**
- * Fetch and normalize tokens from Jupiter's free public token API.
+ * Fetch and normalize tokens from Jupiter's token API.
  * Never crashes on network failure or timeouts — returns an empty array on error.
  */
 export async function fetchTokensFromJupiter(): Promise<NormalizedToken[]> {
@@ -25,14 +25,19 @@ export async function fetchTokensFromJupiter(): Promise<NormalizedToken[]> {
       logger.info(`[JupiterTokenAdapter] Fetching tokens from: ${url}`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'User-Agent': 'FluxPay-Backend/1.0',
+      };
+      if (process.env.JUPITER_API_KEY) {
+        headers['x-api-key'] = process.env.JUPITER_API_KEY;
+      }
 
       const response = await fetch(url, {
         signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'FluxPay-Backend/1.0',
-        },
+        headers,
       });
 
       clearTimeout(timeoutId);
@@ -55,11 +60,11 @@ export async function fetchTokensFromJupiter(): Promise<NormalizedToken[]> {
       const seenMints = new Set<string>();
 
       for (const t of tokensArray) {
-        const mint = (t.address || t.mint || '').trim();
+        const mint = (t.address || t.mint || t.id || '').trim();
         const symbol = (t.symbol || '').trim();
         const name = (t.name || '').trim();
         const decimals = typeof t.decimals === 'number' ? t.decimals : parseInt(t.decimals, 10);
-        const logoURI = t.logoURI || t.logoUrl || null;
+        const logoURI = t.logoURI || t.logoUrl || t.icon || null;
 
         // Validation: must have valid mint, symbol, name, and non-negative integer decimals
         if (

@@ -118,6 +118,7 @@ export class WebhookQueueService {
       this.webhookQueue.on('error', (err) => {
         logger.warn(`[WebhookQueue] Queue Redis error: ${err.message}`);
       });
+      this.webhookQueue.client.then((c) => c.on('error', () => {})).catch(() => {});
 
       this.webhookWorker = new Worker(
         'webhook-delivery-queue',
@@ -138,6 +139,7 @@ export class WebhookQueueService {
       this.webhookWorker.on('error', (err) => {
         logger.warn(`[WebhookQueue] Worker Redis error: ${err.message}`);
       });
+      this.webhookWorker.client.then((c) => c.on('error', () => {})).catch(() => {});
 
       this.webhookWorker.on('completed', (job) => {
         logger.info(`[WebhookQueue] Job ${job.id} completed successfully`);

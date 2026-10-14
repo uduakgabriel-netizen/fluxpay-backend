@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     region: oregon
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -35,7 +35,11 @@ services:
       - key: SOLANA_RPC_PRIMARY
         value: https://api.devnet.solana.com
       - key: JUPITER_API_URL
-        value: https://quote-api.jup.ag/v6
+        value: https://api.jup.ag/swap/v1
+      - key: JUPITER_API_KEY
+        value: jup_403a0194733904425080cf0e587c7eda66b1a430bc1fc8698f5e76c2d2b4c79d
+      - key: REDIS_URL
+        value: redis://default:gQAAAAAAAzAcAAIgcDE4Mjk1MGRkMzI2Njc0MzNiODZhNDk4OTJmZDI0ZGZlYg@amusing-crow-208924.upstash.io:6379
       - key: USE_MOCK_PROVIDERS
         value: "true"
 

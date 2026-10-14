@@ -38,7 +38,6 @@ const publicLimiter = rateLimit({
 /** POST /api/checkout/sessions — Create checkout session (API key required) */
 router.post(
   '/sessions',
-  requireAuthOrApiKey as any,
   createSessionLimiter,
   checkoutController.createSession as any
 );

@@ -85,6 +85,10 @@ export async function initCronJobs() {
   }
 }
 
+export function isCronRedisConnected(): boolean {
+  return cronWorker !== null && cronQueue !== null;
+}
+
 // ─── BullMQ-based cron jobs (production, with Redis) ────────
 
 async function initBullMQCronJobs() {
@@ -158,6 +162,7 @@ async function initBullMQCronJobs() {
   });
 
   logger.info('[CronJobs] BullMQ cron jobs ready (Redis-backed)');
+  logger.info('[CronJobs] Redis connected');
 }
 
 // ─── Fallback: setInterval-based cron jobs (no Redis) ───────

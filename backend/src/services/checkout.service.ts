@@ -40,7 +40,7 @@ export const memoryCheckoutNonces = new Map<string, CheckoutNonce>();
 
 const SESSION_EXPIRY_HOURS = 1;
 const CHECKOUT_BASE_URL = process.env.FLUXPAY_CHECKOUT_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
-const JUPITER_QUOTE_URL = process.env.JUPITER_API_URL ? `${process.env.JUPITER_API_URL}/quote` : 'https://api.jup.ag/swap/v2/quote';
+const JUPITER_QUOTE_URL = process.env.JUPITER_API_URL ? `${process.env.JUPITER_API_URL}/quote` : 'https://api.jup.ag/swap/v1/quote';
 
 // Token info for resolving session token symbols to mint addresses
 const TOKEN_INFO: Record<string, { mint: string; decimals: number }> = {
@@ -126,6 +126,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
         logger.info(`Returning existing active session: ${existing.id} for orderId: ${orderId}`);
         return {
           id: existing.id,
+          sessionId: existing.id,
           checkoutUrl: `${CHECKOUT_BASE_URL}/pay/${existing.id}`,
           amount: existing.amount,
           token: existing.token,
@@ -176,6 +177,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
 
   return {
     id: session.id,
+    sessionId: session.id,
     checkoutUrl: `${CHECKOUT_BASE_URL}/pay/${session.id}`,
     amount: session.amount,
     token: session.token,
@@ -625,7 +627,15 @@ export async function executeCheckoutPayment(
 
     console.log('Jupiter quote request:', { inputMint: inputToken, outputMint: merchantTokenMint, amount: outputAmountSmallest, swapMode: 'ExactOut' });
 
+    const quoteHeaders: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    if (process.env.JUPITER_API_KEY) {
+      quoteHeaders['x-api-key'] = process.env.JUPITER_API_KEY;
+    }
+
     const quoteRes = await fetch(`${JUPITER_QUOTE_URL}?${quoteParams}`, {
+      headers: quoteHeaders,
       signal: AbortSignal.timeout(15000),
     });
 

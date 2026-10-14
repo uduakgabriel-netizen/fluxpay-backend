@@ -231,7 +231,7 @@ export async function getNetworkInfo(req: Request, res: Response): Promise<void>
     rpcUrl: rpcUrl ? rpcUrl.replace(/\/\/.*@/, '//***@') : 'not configured', // Hide credentials
     fluxpayWallet: process.env.FLUXPAY_WALLET_PUBLIC_KEY || 'not configured',
     heliusConfigured: !!process.env.HELIUS_API_KEY,
-    jupiterApiUrl: process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v2',
+    jupiterApiUrl: process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v1',
     supportedTokens: getAllTokenSymbols(),
   });
 }

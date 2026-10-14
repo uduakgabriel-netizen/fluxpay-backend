@@ -34,13 +34,19 @@ let webhookQueue: Queue | null = null;
 let webhookWorker: Worker | null = null;
 let useRedis = false;
 
+export function isWebhookRedisConnected(): boolean {
+  return useRedis;
+}
+
 /**
  * Initialize the BullMQ webhook queue.
  * Call this on server startup.
  */
 export async function initWebhookQueue(): Promise<void> {
   try {
+    const isTls = REDIS_URL.startsWith('rediss://') || REDIS_URL.includes('upstash.io');
     redisConnection = new IORedis(REDIS_URL, {
+      tls: isTls ? {} : undefined,
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       lazyConnect: true,
@@ -70,6 +76,7 @@ export async function initWebhookQueue(): Promise<void> {
 
     // Create the worker that processes webhook deliveries
     const workerConnection = new IORedis(REDIS_URL, {
+      tls: isTls ? {} : undefined,
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       lazyConnect: true,
@@ -107,6 +114,7 @@ export async function initWebhookQueue(): Promise<void> {
 
     useRedis = true;
     logger.info('[Webhook] BullMQ queue and worker initialized');
+    logger.info('[Webhook] Redis connected');
   } catch (error: any) {
     logger.warn(`[Webhook] Redis unavailable (${error.message}). Using in-memory fallback.`);
     useRedis = false;

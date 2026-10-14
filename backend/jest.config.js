@@ -7,5 +7,6 @@ module.exports = {
   silent: false,
   moduleNameMapper: {
     '^uuid$': '<rootDir>/src/tests/mocks/uuid.js',
+    '^nanoid$': '<rootDir>/src/tests/mocks/nanoid.js',
   },
 };

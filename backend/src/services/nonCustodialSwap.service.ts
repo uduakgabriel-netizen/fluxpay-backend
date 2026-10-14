@@ -34,7 +34,7 @@ import { getGasWalletKeypair, getEscrowWalletPublicKey } from '../config/wallets
 
 const prisma = new PrismaClient();
 
-const JUPITER_API_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v2';
+const JUPITER_API_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v1';
 const MAX_SWAP_RETRIES = 5;
 const INITIAL_SLIPPAGE_BPS = 100; // 1%
 const MIN_MERCHANT_SOL_BALANCE = 0.005; // Minimum SOL for ATA rent
@@ -168,7 +168,15 @@ export async function getNonCustodialQuote(
 
     logger.info(`[NonCustodial] Getting ExactOut quote: merchant wants ${amount} ${toToken} (${outputAmountSmallest} smallest), buyer pays with ${fromToken} (slippage: ${slippageBps}bps)`);
 
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    if (process.env.JUPITER_API_KEY) {
+      headers['x-api-key'] = process.env.JUPITER_API_KEY;
+    }
+
     const response = await fetch(url.toString(), {
+      headers,
       signal: AbortSignal.timeout(15000),
     });
 
@@ -261,9 +269,17 @@ export async function buildSwapTransaction(
 
     logger.info(`[NonCustodial] Building swap tx: ${customerWallet.slice(0, 8)}... → ${merchantWallet.slice(0, 8)}...`);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (process.env.JUPITER_API_KEY) {
+      headers['x-api-key'] = process.env.JUPITER_API_KEY;
+    }
+
     const swapResponse = await fetch(`${JUPITER_API_URL}/swap`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(swapRequestBody),
       signal: AbortSignal.timeout(30000),
     });

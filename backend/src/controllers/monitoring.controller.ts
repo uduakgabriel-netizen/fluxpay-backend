@@ -4,6 +4,8 @@ import { memoryTransactions } from '../services/offrampExecution.service';
 import { memorySettlements } from '../services/settlement.service';
 import { memoryWebhookLogs } from '../middleware/verifyWebhookSignature';
 import { inMemoryWebhookLogs, WebhookQueueService } from '../services/webhookQueue.service';
+import { isWebhookRedisConnected } from '../utils/webhook';
+import { isCronRedisConnected } from '../queues/jobQueue';
 import { logger } from '../utils/logger';
 
 const prisma = new PrismaClient();
@@ -21,10 +23,12 @@ export async function getSystemHealth(req: Request, res: Response): Promise<void
     dbStatus = 'disconnected';
   }
 
-  const isRedisConnected = WebhookQueueService.isUsingRedis();
+  const isRedisConnected = WebhookQueueService.isUsingRedis() || isWebhookRedisConnected() || isCronRedisConnected();
 
   res.status(200).json({
     status: 'ok',
+    database: dbStatus,
+    redis: isRedisConnected ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
     services: {
       database: dbStatus,

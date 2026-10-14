@@ -149,6 +149,9 @@ export class TokenRegistryService {
 
     const total = memoryTokens.size;
     logger.info(
+      `[TokenRegistryService] Completed token refresh: ${added} added, ${updated} updated, ${total} total tokens available.`
+    );
+    logger.info(
       `[TokenRegistryService] Token refresh completed: ${added} added, ${updated} updated, ${total} total tokens available.`
     );
 

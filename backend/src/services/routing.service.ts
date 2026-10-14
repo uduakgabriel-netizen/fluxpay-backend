@@ -44,9 +44,11 @@ export interface JupiterOfframpQuote {
 function getJupiterHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   };
-  if (JUPITER_API_KEY) {
-    headers['x-api-key'] = JUPITER_API_KEY;
+  const apiKey = process.env.JUPITER_API_KEY || JUPITER_API_KEY;
+  if (apiKey) {
+    headers['x-api-key'] = apiKey;
   }
   return headers;
 }

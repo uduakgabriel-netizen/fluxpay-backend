@@ -53,7 +53,7 @@ export const requireApiKey = async (
 
     if (!apiKey) {
       res.status(401).json({
-        error: 'No API key provided. Use header "x-api-key: sk_live_..." or "Authorization: Bearer sk_live_..."',
+        error: 'Invalid API key',
       });
       return;
     }
@@ -175,7 +175,7 @@ export const requireApiKey = async (
     }
 
     if (!merchantRecord) {
-      res.status(401).json({ error: 'Invalid or revoked API key' });
+      res.status(401).json({ error: 'Invalid API key' });
       return;
     }
 

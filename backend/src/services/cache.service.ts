@@ -8,7 +8,9 @@ class CacheService {
   private hasLoggedError = false;
 
   constructor() {
+    const isTls = REDIS_URL.startsWith('rediss://') || REDIS_URL.includes('upstash.io');
     this.redis = new IORedis(REDIS_URL, {
+      tls: isTls ? {} : undefined,
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       lazyConnect: true,

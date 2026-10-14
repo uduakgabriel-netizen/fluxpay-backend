@@ -8,6 +8,7 @@ if (process.env.DATABASE_URL) {
 
 import app from './app';
 import { initWebhookQueue, shutdownWebhookQueue } from './utils/webhook';
+import { WebhookQueueService } from './services/webhookQueue.service';
 import { initCronJobs, shutdownCronJobs } from './queues/jobQueue';
 import { startRefreshTokensCron, stopRefreshTokensCron } from './jobs/refreshTokens.job';
 import { startExpireQuotesCron, stopExpireQuotesCron } from './jobs/expireQuotes.job';
@@ -20,6 +21,17 @@ import { AlertService } from './services/alert.service';
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
 async function bootstrap() {
+  if (process.env.DATABASE_URL) {
+    try {
+      const { execSync } = require('child_process');
+      logger.info('[Database] Ensuring Prisma migrations are deployed (npx prisma migrate deploy)...');
+      execSync('npx prisma migrate deploy', { stdio: 'inherit', env: process.env });
+      logger.info('[Database] Prisma migrations verified successfully.');
+    } catch (err: any) {
+      logger.warn(`[Database] Prisma migration deploy notice: ${err.message}`);
+    }
+  }
+
   const server = app.listen(PORT, () => {
     logger.info(`
 ⚡ FluxPay Backend Server (Non-Custodial)
@@ -48,6 +60,10 @@ Checkout:     /api/checkout
       initWebhookQueue()
         .then(() => logger.info('Webhook queue initialized'))
         .catch(err => logger.error('Webhook queue error:', err));
+
+      WebhookQueueService.init()
+        .then(() => logger.info('WebhookQueueService initialized'))
+        .catch(err => logger.error('WebhookQueueService error:', err));
 
       initCronJobs()
         .then(() => logger.info('Cron jobs initialized'))
@@ -87,6 +103,7 @@ Checkout:     /api/checkout
     stopReconciliationCron();
     await shutdownCronJobs();
     await shutdownWebhookQueue();
+    await WebhookQueueService.shutdown();
 
     server.close(() => {
       process.exit(0);

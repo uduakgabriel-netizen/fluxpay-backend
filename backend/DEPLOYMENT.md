@@ -24,7 +24,7 @@ Fill in the deployment settings:
 | **Branch** | `main` |
 | **Root Directory** | `.` *(Must be dot / root — do not leave empty)* |
 | **Runtime** | `Node` |
-| **Build Command** | `npm install && npm run build` |
+| **Build Command** | `npm install && npx prisma generate && npx prisma migrate deploy && npm run build` |
 | **Start Command** | `npm start` |
 | **Instance Type** | Starter ($7/mo) or Standard (Recommended) |
 
@@ -84,7 +84,8 @@ FLUXPAY_ESCROW_WALLET_PUBLIC_KEY=YOUR_SOLANA_ESCROW_WALLET_PUBLIC_KEY
 FLUXPAY_ESCROW_WALLET_PRIVATE_KEY_BASE64=YOUR_SOLANA_ESCROW_WALLET_PRIVATE_KEY_BASE64
 
 # DEX & Real-Time Monitoring
-JUPITER_API_URL=https://quote-api.jup.ag/v6
+JUPITER_API_URL=https://api.jup.ag/swap/v1
+JUPITER_API_KEY=YOUR_JUPITER_API_KEY
 HELIUS_API_KEY=YOUR_HELIUS_API_KEY
 HELIUS_WEBHOOK_SECRET=YOUR_HELIUS_WEBHOOK_SECRET
 

@@ -15,6 +15,14 @@ import { AppError } from '../services/auth.service';
 import { logger } from '../utils/logger';
 import * as checkoutService from '../services/checkout.service';
 import { z } from 'zod';
+import { PrismaClient } from '@prisma/client';
+import { createHash } from 'crypto';
+import { memoryMerchants } from '../services/auth.service';
+import { apiKeyToMerchantMap, memorySecrets } from '../services/secret.service';
+import { memoryApiKeys } from '../services/apikey.service';
+import { extractApiKey } from '../middleware/apikey.middleware';
+
+const prisma = new PrismaClient();
 
 // ─── Validation Schemas ─────────────────────────────────────
 
@@ -25,6 +33,7 @@ const createSessionSchema = z.object({
   successUrl: z.string().url().optional(),
   cancelUrl: z.string().url().optional(),
   webhookUrl: z.string().url().optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const checkoutNonceSchema = z.object({
@@ -52,13 +61,92 @@ const confirmSchema = z.object({
 
 // ─── POST /api/checkout/sessions ────────────────────────────
 
-export async function createSession(req: AuthRequest, res: Response): Promise<void> {
+export async function createSession(req: Request, res: Response): Promise<void> {
   try {
-    if (!req.merchant) {
-      res.status(401).json({ error: 'API key authentication required' });
+    // 1. Read x-api-key header (supporting x-api-key, X-API-KEY, or Authorization Bearer)
+    const rawApiKey = (req.headers['x-api-key'] || req.headers['X-API-KEY']) as string | undefined;
+    let apiKey = typeof rawApiKey === 'string' && rawApiKey.trim() ? rawApiKey.trim() : null;
+
+    if (!apiKey) {
+      apiKey = extractApiKey(req);
+    }
+
+    if (!apiKey) {
+      res.status(401).json({ error: 'Invalid API key' });
       return;
     }
 
+    // 2. Hash it
+    const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
+
+    // 3. Find the merchant via prisma.merchant.findFirst({ where: { apiKeyHash: hash } })
+    let merchant: any = null;
+    try {
+      merchant = await prisma.merchant.findFirst({
+        where: { apiKeyHash },
+      });
+    } catch (err: any) {
+      logger.warn(`[Checkout] DB findFirst by apiKeyHash error: ${err.message}`);
+    }
+
+    // Fallbacks for ApiKey table and in-memory demo resilience
+    if (!merchant) {
+      try {
+        const apiKeyRow = await prisma.apiKey.findUnique({
+          where: { keyHash: apiKeyHash },
+          include: { merchant: true },
+        });
+        if (apiKeyRow && !apiKeyRow.revoked && apiKeyRow.merchant) {
+          merchant = apiKeyRow.merchant;
+        }
+      } catch (err: any) {
+        logger.warn(`[Checkout] DB apiKey lookup error: ${err.message}`);
+      }
+    }
+
+    if (!merchant) {
+      merchant = apiKeyToMerchantMap.get(apiKeyHash);
+    }
+
+    if (!merchant) {
+      for (const m of memoryMerchants.values()) {
+        if (m && m.apiKeyHash === apiKeyHash) {
+          merchant = m;
+          break;
+        }
+      }
+    }
+
+    if (!merchant) {
+      for (const [id, s] of memorySecrets.entries()) {
+        if (s && s.apiKeyHash === apiKeyHash) {
+          const memM = memoryMerchants.get(id);
+          merchant = memM || { id };
+          break;
+        }
+      }
+    }
+
+    if (!merchant) {
+      for (const k of memoryApiKeys.values()) {
+        if (k && k.keyHash === apiKeyHash && !k.revoked) {
+          const memM = memoryMerchants.get(k.merchantId);
+          merchant = memM || { id: k.merchantId };
+          break;
+        }
+      }
+    }
+
+    // If no merchant → return 401 { error: "Invalid API key" }
+    if (!merchant) {
+      res.status(401).json({ error: 'Invalid API key' });
+      return;
+    }
+
+    // Attach resolved merchant to request for downstream handlers or logging
+    (req as any).merchant = merchant;
+
+    // 4. Validate request body (without merchantId)
     const parsed = createSessionSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -71,14 +159,16 @@ export async function createSession(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // 5. All subsequent logic uses the resolved merchant from the key
     const result = await checkoutService.createCheckoutSession({
-      merchantId: req.merchant.id,
+      merchantId: merchant.id,
       amount: parsed.data.amount,
       token: parsed.data.token,
       orderId: parsed.data.orderId,
       successUrl: parsed.data.successUrl,
       cancelUrl: parsed.data.cancelUrl,
       webhookUrl: parsed.data.webhookUrl,
+      metadata: parsed.data.metadata,
     });
 
     res.status(201).json(result);

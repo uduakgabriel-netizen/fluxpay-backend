@@ -28,11 +28,23 @@ import { AlertService } from './alert.service';
 
 const prisma = new PrismaClient();
 
-const JUPITER_API_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v2';
+const JUPITER_API_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v1';
 const MAX_SWAP_RETRIES = 5;
 const QUOTE_EXPIRY_SECONDS = 60;
 const INITIAL_SLIPPAGE_BPS = 100; // 1%
 const MAX_SLIPPAGE_BPS = 1000; // 10%
+
+function getJupiterHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  };
+  const apiKey = process.env.JUPITER_API_KEY;
+  if (apiKey) {
+    headers['x-api-key'] = apiKey;
+  }
+  return headers;
+}
 
 // Retry delays: 5s, 5s, 10s, 15s (between attempts)
 const RETRY_DELAYS_MS = [5000, 5000, 10000, 15000];
@@ -111,6 +123,7 @@ export async function getSwapQuote(
     console.log('Jupiter quote request:', { inputMint, outputMint, amount, outputAmountSmallest, swapMode: 'ExactOut' });
 
     const response = await fetch(url.toString(), {
+      headers: getJupiterHeaders(),
       signal: AbortSignal.timeout(15000), // 15s timeout
     });
 
@@ -168,7 +181,7 @@ export async function buildNonCustodialSwapTx(
   try {
     const swapResponse = await fetch(`${JUPITER_API_URL}/swap`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getJupiterHeaders(),
       body: JSON.stringify({
         quoteResponse: quote,
         userPublicKey: customerWallet,           // Customer pays from here
@@ -329,7 +342,9 @@ export async function getJupiterQuote({ inputMint, outputMint, amount, slippageB
   });
 
   try {
-    const res = await fetch(`${JUPITER_API_URL}/quote?${params}`);
+    const res = await fetch(`${JUPITER_API_URL}/quote?${params}`, {
+      headers: getJupiterHeaders(),
+    });
 
     if (!res.ok) {
       const body = await res.text();
@@ -370,7 +385,7 @@ export async function buildJupiterSwapTransaction({ quote, userPublicKey, destin
 
     const res = await fetch(`${JUPITER_API_URL}/swap`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getJupiterHeaders(),
       body: JSON.stringify(body),
     });
 

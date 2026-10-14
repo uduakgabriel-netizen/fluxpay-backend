@@ -76,8 +76,8 @@ const CORE_FALLBACK_TOKENS = [
 ]
 
 // Jupiter's verified tokens API — returns verified tokens with metadata
-const JUPITER_TOKEN_API = 'https://token.jup.ag/all'
-const JUPITER_STRICT_API = 'https://token.jup.ag/strict' // Only verified/strict tokens
+const JUPITER_STRICT_API = process.env.JUPITER_TOKEN_API_URL || 'https://lite-api.jup.ag/tokens/v2/tag?query=verified';
+const JUPITER_TOKEN_API = 'https://api.jup.ag/tokens/v2/tag?query=verified';
 
 export class TokenService {
   /**
@@ -202,18 +202,26 @@ export class TokenService {
       logger.info('[TokenService] Starting full token cache refresh from Jupiter...')
 
       let jupiterTokens: any[] = []
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'User-Agent': 'FluxPay-Backend/1.0',
+      };
+      if (process.env.JUPITER_API_KEY) {
+        headers['x-api-key'] = process.env.JUPITER_API_KEY;
+      }
 
       // Try strict API first (better quality, ~1000 tokens)
       try {
         const response = await Promise.race([
-          fetch(JUPITER_STRICT_API),
+          fetch(JUPITER_STRICT_API, { headers }),
           new Promise<Response>((_, reject) =>
             setTimeout(() => reject(new Error('Strict API timeout')), 30000)
           ),
         ]) as Response
 
         if (response.ok) {
-          jupiterTokens = (await response.json()) as any[]
+          const raw = await response.json()
+          jupiterTokens = Array.isArray(raw) ? raw : (raw as any)?.tokens || []
           logger.info(`[TokenService] Fetched ${jupiterTokens.length} verified tokens from Jupiter strict API`)
         }
       } catch (err: any) {
@@ -224,14 +232,15 @@ export class TokenService {
       if (jupiterTokens.length === 0) {
         try {
           const response = await Promise.race([
-            fetch(JUPITER_TOKEN_API),
+            fetch(JUPITER_TOKEN_API, { headers }),
             new Promise<Response>((_, reject) =>
               setTimeout(() => reject(new Error('Full API timeout')), 30000)
             ),
           ]) as Response
 
           if (response.ok) {
-            jupiterTokens = (await response.json()) as any[]
+            const raw = await response.json()
+            jupiterTokens = Array.isArray(raw) ? raw : (raw as any)?.tokens || []
             logger.info(`[TokenService] Fetched ${jupiterTokens.length} tokens from Jupiter full API`)
           }
         } catch (err: any) {
@@ -255,7 +264,7 @@ export class TokenService {
 
       // Filter tokens with valid data
       const validTokens = jupiterTokens.filter((t: any) => {
-        const address = t.address || t.mint
+        const address = t.address || t.mint || t.id
         return (
           address &&
           t.symbol &&
@@ -276,14 +285,16 @@ export class TokenService {
         const batch = validTokens.slice(i, i + batchSize)
 
         const promises = batch.map((token: any, index: number) => {
-          const mint = token.address || token.mint || ''
+          const mint = token.address || token.mint || token.id || ''
+          const logo = token.logoURI || token.logoUrl || token.icon || null
           return (prisma as any).supportedToken.upsert({
             where: { mint },
             update: {
               symbol: token.symbol,
               name: token.name,
               decimals: token.decimals,
-              logoUrl: token.logoURI || token.logoUrl || '',
+              logoUrl: logo,
+              logoURI: logo,
               rank: i + index + 1,
               isActive: true,
               updatedAt: new Date(),
@@ -293,7 +304,8 @@ export class TokenService {
               symbol: token.symbol,
               name: token.name,
               decimals: token.decimals,
-              logoUrl: token.logoURI || token.logoUrl || '',
+              logoUrl: logo,
+              logoURI: logo,
               rank: i + index + 1,
               isActive: true,
             },
@@ -307,14 +319,16 @@ export class TokenService {
           // If batch fails, try individually
           for (const token of batch) {
             try {
-              const mint = token.address || token.mint || ''
+              const mint = token.address || token.mint || token.id || ''
+              const logo = token.logoURI || token.logoUrl || token.icon || null
               await (prisma as any).supportedToken.upsert({
                 where: { mint },
                 update: {
                   symbol: token.symbol,
                   name: token.name,
                   decimals: token.decimals,
-                  logoUrl: token.logoURI || token.logoUrl || '',
+                  logoUrl: logo,
+                  logoURI: logo,
                   rank: upsertedCount + 1,
                   isActive: true,
                   updatedAt: new Date(),
@@ -324,7 +338,8 @@ export class TokenService {
                   symbol: token.symbol,
                   name: token.name,
                   decimals: token.decimals,
-                  logoUrl: token.logoURI || token.logoUrl || '',
+                  logoUrl: logo,
+                  logoURI: logo,
                   rank: upsertedCount + 1,
                   isActive: true,
                 },

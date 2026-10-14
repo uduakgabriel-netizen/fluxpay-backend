@@ -68,7 +68,7 @@ export async function getSwapQuote(req: Request, res: Response) {
     }
 
     // Fetch quote from Jupiter
-    const jupiterApiUrl = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v2';
+    const jupiterApiUrl = process.env.JUPITER_API_URL || 'https://api.jup.ag/swap/v1';
     const quoteUrl = new URL(`${jupiterApiUrl}/quote`);
     quoteUrl.searchParams.append('inputMint', String(inputMint))
     quoteUrl.searchParams.append('outputMint', String(outputMint))
@@ -82,8 +82,15 @@ export async function getSwapQuote(req: Request, res: Response) {
     try {
       console.log('Jupiter quote request:', { inputMint, outputMint, amount, swapMode: req.query.swapMode || 'ExactIn' });
       
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+      };
+      if (process.env.JUPITER_API_KEY) {
+        headers['x-api-key'] = process.env.JUPITER_API_KEY;
+      }
+
       const quoteResponse = await Promise.race([
-        fetch(quoteUrl.toString()),
+        fetch(quoteUrl.toString(), { headers }),
         new Promise<globalThis.Response>((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), 10000)
         ),
